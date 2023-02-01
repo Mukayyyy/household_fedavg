@@ -1,0 +1,8 @@
+# ignore all chache files
+__pycache__/
+*.pyc
+
+# ignore log files
+*.log
+
+.DS_Store
