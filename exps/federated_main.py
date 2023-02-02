@@ -30,7 +30,8 @@ from utils import average_weights_het_protofc1, ditto,get_dataset
 from utils import get_dataset_proto1,get_dataset_proto2,get_dataset_proto3,get_dataset_proto_mix
 
 
-def FedAvg(args, train_loader_list, test_dataset_list,local_model_list):
+def FedAvg(args, train_loader_list, test_dataset_list,local_model_list, label_file):
+    print('label: ', label_file)
     #idxs_users = np.arange(args.num_users)
     idxs_users = np.arange(args.num_users)
     # if args.byzantine_ratio>0:
@@ -95,11 +96,28 @@ def FedAvg(args, train_loader_list, test_dataset_list,local_model_list):
         if np.mean(mcc_list) > mcc_max:
             mcc_max = np.mean(mcc_list)
 
+    train_loss= np.array(train_loss)
+    acc_list = np.array(acc_list)
+    mcc_list = np.array(mcc_list)
+
+    np.save('fedavg1/' + label_file + '_loss.npy', train_loss)
+    np.save('fedavg1/' + label_file + '_acc.npy', acc_list)
+    np.save('fedavg1/' + label_file + '_mcc.npy', mcc_list)
+
+    print("Save train loss and score successfully.")
+
     print("label type:", args.label_path)
     print("heter_type:", args.proto_dataset_type, ",algorithm:", args.alg, ",train_loss", train_loss)
     print("model:", args.model, ",unlabeled_ratio:", args.unlabeled_ratio,"proto_dataset_type:",args.proto_dataset_type)
     print('max acc/mcc is {:.5f} / {:.5f} '.format(acc_max, mcc_max))
-    print()
+
+    with open(r'test_log.txt', 'a') as fp:
+        fp.write('label type: %s\n' % args.label_path)
+        fp.write("heter_type: " + args.proto_dataset_type + ", algorithm: " + args.alg + ", train_loss: " + str(train_loss) + '\n')
+        fp.write('max acc/mcc is {:.5f} / {:.5f} \n'.format(acc_max, mcc_max))
+        fp.write(' \n')
+
+    print("Write test log successfully.")
 
 
 if __name__ == '__main__':
@@ -172,7 +190,7 @@ if __name__ == '__main__':
                 local_model_list.append(local_model)
 
             if args.alg in ('fedavg','fedprox'):
-                FedAvg(args, train_loader_list, test_dataset_list,local_model_list)
+                FedAvg(args, train_loader_list, test_dataset_list,local_model_list, label_file)
 
     # heterogenious
     # for heter in heter_name:
