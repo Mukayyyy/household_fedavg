@@ -128,6 +128,7 @@ if __name__ == '__main__':
 
     # set random seeds
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print('device: ', args.device)
     if args.device == 'cuda':
         torch.cuda.set_device(args.gpu)
         torch.cuda.manual_seed(args.seed)
