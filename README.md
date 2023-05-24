@@ -1,10 +1,22 @@
 # FedAVG for household characteristic prediction
 
-This code is for household characteristic prediction. The main code is in the  `lib`. If you want to directly run this code, try run this following command:
+This code is for household characteristic prediction. The main code is in the  `lib`. 
+
+To directly run the non-DP version, set the parameter `args.model` to the corresponding model option, and run this following command:
 `cd exps`
 `python feaderated_main.py`
 
----
+To run the DP version, directly run:
+`python feaderated_dp.py`
+
+To record the running log, try command:
+`python federated_dp.py > example_run.log`
+
+
+# Running environment requirement
+`requirement.txt`
+
+
 
 ## how to change
 
@@ -18,7 +30,5 @@ there are seveal parts in this code.
 ---
 
 ---
-
-- [x] `import error`, do  `pip install -r requirements.txt`
 
 

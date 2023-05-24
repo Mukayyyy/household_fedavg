@@ -15,6 +15,7 @@ from sampling import SemiSupervisionSampler,SupervisionSampler
 from transforms import TSRandomCrop, TSTimeWarp, TSMagWarp, TSMagScale, TSTimeNoise, \
     TSCutOut, TSMagNoise, RandAugment, DuplicateTransform, TransformFixMatch, RandAugmentMC
 from sklearn.preprocessing import StandardScaler,MinMaxScaler
+from sklearn import preprocessing
 
 class TimeseriesDataset(Dataset):
     def __init__(self, data,  # time_day, time_hour,
@@ -271,6 +272,64 @@ def split_data(x, y, splits, label_num):
 #     elif x<16:
 #         return 3
 
+def get_dataset_sklearn(args):
+    # data = pickle.load(open('../data/id_elec_twohours_dict.pkl', 'rb'))
+    data = pickle.load(open('../data/id_elec_halfhour_dict.pkl', 'rb'))
+    label = pd.read_csv(args.label_path,header=None)
+    data_np = []
+    y = []
+    label_dict = {}
+    for i in label.iterrows():
+        try:
+            label_dict[i[1][0]] = i[1][1]
+        except:
+            continue
+    for i in data.keys():
+        try:
+            y.append([label_dict[i]])
+            data_np.append(data[i])
+        except:
+            continue
+    data_np = np.array(data_np)
+    # l2_norm = np.linalg.norm(data_np, ord=2, axis=1)
+    # max_norm = np.max(l2_norm)
+    # print(max_norm)
+    SS = StandardScaler()
+    data_np = SS.fit_transform(data_np)
+    y = np.array(y)
+
+    if args.unlabeled_ratio!=0:
+        data_np_new, _, y_new, _ = train_test_split(
+            data_np, y,
+            test_size=args.unlabeled_ratio,
+            random_state=2002,
+            stratify=y
+        )
+        data_np = data_np_new
+        y = y_new
+    #print("label1:", pd.Series(y.reshape(-1, )).value_counts(), "data.shape", data_np.shape)
+    skf = StratifiedKFold(n_splits=args.num_users)
+    X_train_list = []
+    y_train_list = []
+
+    X_test_list = []
+    y_test_list = []
+
+    for train_index, test_index in skf.split(data_np, y):
+        X_train, X_test, y_train, y_test = train_test_split(
+            data_np[train_index], y[train_index],
+            test_size=0.2,
+            #random_state=2002,
+            #stratify=y[train_index]
+        )
+        X_train_list.append(X_train)
+        y_train_list.append(y_train)
+
+        X_test_list.append(X_test)
+        y_test_list.append(y_test)
+
+    return X_train_list, X_test_list, y_train_list, y_test_list
+
 def get_dataset(args):
     # data = pickle.load(open('../data/id_elec_twohours_dict.pkl', 'rb'))
     data = pickle.load(open('../data/id_elec_halfhour_dict.pkl', 'rb'))
@@ -290,6 +349,8 @@ def get_dataset(args):
         except:
             continue
     data_np = np.array(data_np)
+    # maxnorm = np.linalg.norm(data_np, np.inf)
+    # print('------maxnorm-----: ', maxnorm)
     SS = StandardScaler()
     data_np = SS.fit_transform(data_np)
     y = np.array(y)
@@ -2365,12 +2426,34 @@ def average_weights(w):
     """
     Returns the average of the weights.
     """
+    # print(w[0])
+    # print(w[0].shape)
     w_avg = copy.deepcopy(w[0])
     for key in w[0].keys():
         for i in range(1, len(w)):
             w_avg[key] += w[i][key]
         w_avg[key] = torch.div(w_avg[key], len(w))
+    # w_avg = np.mean(w, axis=0)
     return w_avg
+
+# for sklearn model
+def average_weights_sklearn(w):
+    """
+    Returns the average of the weights.
+    """
+    w_avg = np.mean(w, axis=0)
+    return w_avg
+
+
+def average_weights_GNB(w):
+    """
+    Returns the average of the weights.
+    """
+    theta_sum = sum(w[i]["theta_"] for i in range(len(w)))
+    var_sum = sum(w[i]["var_"] for i in range(len(w)))
+    theta_avg = theta_sum / len(w)
+    var_avg = var_sum / len(w)
+    return {"theta_": theta_avg, "var_": var_avg}
 
 # torch.true_div vs div
 def average_weights_sem(w, n_list):

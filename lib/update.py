@@ -14,7 +14,9 @@ from PolyLoss import PolyLoss
 from FocalLoss import focal_loss
 from sklearn.preprocessing import LabelEncoder
 from torch.nn.functional import cross_entropy
-from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import matthews_corrcoef, log_loss, accuracy_score
+from diffprivlib.models import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 
 class DatasetSplit(Dataset):
     """An abstract Dataset class wrapped around Pytorch Dataset class.
@@ -128,9 +130,13 @@ def _indices_to_one_hot(data, nb_classes):
     return np.eye(nb_classes)[targets]
 
 class LocalUpdate(object):
-    def __init__(self, args, dataset):
+    def __init__(self, args, dataset, y=None):
         self.args = args
         self.trainloader = dataset
+        
+        np.seterr(invalid='ignore')
+        self.X_train = np.array(dataset)
+        self.y_train = np.array(y)
         self.device = args.device
 
     def adjust_learning_rate(self, optimizer, epoch):
@@ -150,10 +156,81 @@ class LocalUpdate(object):
                     param_group['lr'] = lr
             print('Updating learning rate to {}'.format(lr))
 
+    # for training the DP model
+    def update_weights_sklearn(self, model, global_round):
+        # sklearn_model = LogisticRegression(data_norm = 20963.366)
+        if global_round != 0:
+            global_model = copy.deepcopy(model)
+        epoch_loss = []
+        epoch_real_loss = []
+        x = self.X_train
+        y = self.y_train.ravel()
+
+        # Apply feature scaling to the training data
+        # scaler = StandardScaler()
+        # x = scaler.fit_transform(x)
+        loss = torch.nn.CrossEntropyLoss()
+
+        for step in range(self.args.train_ep):
+            model.fit(x, y)
+
+            pred = model.predict_proba(x)
+
+            proximal_term = 0.0
+            if self.args.alg=='fedprox' and global_round != 0:
+                for w, w_t in zip(model.parameters(), global_model.parameters()):
+                    proximal_term += (w - w_t).norm(2)\
+
+            np.seterr(invalid='ignore')
+            y = np.nan_to_num(y)
+            pred = np.nan_to_num(pred)
+            # l = log_loss(y, pred)+0.001 * proximal_term
+            l = loss(torch.tensor(pred), torch.tensor(y))
+            # loss_real = log_loss(y, pred)
+            loss_real = l
+            epoch_loss.append(l.item())
+            epoch_real_loss.append(loss_real.item())
+
+
+        return model.coef_, np.sum(epoch_real_loss)/len(epoch_real_loss)
+
+
+    def update_weights_GNB(self, model, global_round):
+        # sklearn_model = LogisticRegression(data_norm = 20963.366)
+        if global_round != 0:
+            global_model = copy.deepcopy(model)
+        epoch_loss = []
+        epoch_real_loss = []
+        x = self.X_train
+        y = self.y_train.ravel()
+
+
+        for step in range(self.args.train_ep):
+            model.fit(x, y)
+
+            pred = model.predict_proba(x)
+
+            proximal_term = 0.0
+            if self.args.alg=='fedprox' and global_round != 0:
+                for w, w_t in zip(model.parameters(), global_model.parameters()):
+                    proximal_term += (w - w_t).norm(2)\
+
+            np.seterr(invalid='ignore')
+            y = np.nan_to_num(y)
+            pred = np.nan_to_num(pred)
+            l = log_loss(y, pred)+0.001 * proximal_term
+
+            loss_real = log_loss(y, pred)
+            epoch_loss.append(l.item())
+            epoch_real_loss.append(loss_real.item())
+
+
+        return {"theta_": model.theta_, "var_": model.var_}, np.sum(epoch_real_loss)/len(epoch_real_loss)
+
 
     def update_weights(self, model, global_round):
         model.to(self.args.device)
-        model.train()
+        model.train() # set the model to training mode
         if global_round != 0:
             global_model = copy.deepcopy(model)
         epoch_loss = []
@@ -275,6 +352,25 @@ class LocalTest(object):
                 optimizer.step()
 
         return model.state_dict()
+
+# for testing the DP model
+def test_inference_sklearn(args, model, X_test, y_test):
+    """ Returns the test accuracy and loss.
+    """
+    loss, total, correct = 0.0, 0.0, 0.0
+    output_list = []
+    true_label_list = []
+
+    output_list = model.predict(X_test)
+    true_label_list = y_test
+
+    metrics = {}
+    metrics['auc'] = 0
+    metrics['mcc'] = matthews_corrcoef(true_label_list, output_list)
+    metrics['f1_score'] = 0
+    # metrics['accuracy'] = correct/total
+    metrics['accuracy'] = accuracy_score(true_label_list, output_list)
+    return metrics
 
 
 def test_inference(args, model, testloader):
@@ -484,18 +580,18 @@ def test_inference_proto(args, model, testloader,global_protos=[]):
 #                     tmp = proto.cpu().detach().numpy()
 #                 else:
 #                     tmp = proto.detach().numpy()
-#                 x.append(tmp)
-#                 y.append(label)
-#                 d.append(i)
-#
-#     x = np.array(x)
-#     y = np.array(y)
-#     d = np.array(d)
-#     np.save('./' + args.alg + '_protos.npy', x)
-#     np.save('./' + args.alg + '_labels.npy', y)
-#     np.save('./' + args.alg + '_idx.npy', d)
-#
-#     print("Save protos and labels successfully.")
+                # x.append(tmp)
+                # y.append(label)
+                # d.append(i)
+
+    # x = np.array(x)
+    # y = np.array(y)
+    # d = np.array(d)
+    # np.save('./' + args.alg + '_protos.npy', x)
+    # np.save('./' + args.alg + '_labels.npy', y)
+    # np.save('./' + args.alg + '_idx.npy', d)
+
+    # print("Save protos and labels successfully.")
 
 def save_protos(args, model, testloader):
     """ Returns the test accuracy and loss.

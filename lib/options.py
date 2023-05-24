@@ -29,7 +29,7 @@ def args_parser():
     parser.add_argument('--proto_dataset_type', type=str, default='none',
                         help="split dataset ways, none, train_length, different_sample,"
                              " unbanlanced_data or mixed")
-    parser.add_argument('--model', type=str, default='dlinear', help='model name,mlp,informer,'
+    parser.add_argument('--model', type=str, default='dlinear', help='model name, mlp,informer,'
                                                                      ' convtrans, dlinear '
                                                                      ', randomforest or cnn_lstm')
     parser.add_argument('--len_for_train', type=float, default=2040, help="N")
@@ -90,6 +90,11 @@ def args_parser():
     parser.add_argument('--verbose', type=int, default=1, help='verbose')
     parser.add_argument('--seed', type=int, default=1234, help='random seed')
     parser.add_argument('--test_ep', type=int, default=10, help="num of test episodes for evaluation")
+
+    # dp arguments
+    parser.add_argument('--dp_epsilon', type=float, default=1, help="differential privacy parameter")
+    parser.add_argument('--lr_data_norm', type=int, default=300, help="data norm for regression")
+    parser.add_argument('--lr_max_iter', type=int, default=500, help="maxium iteration for regression")
 
     # Local arguments
     parser.add_argument('--ways', type=int, default=3, help="num of classes")
